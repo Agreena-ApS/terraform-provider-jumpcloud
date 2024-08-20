@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"slices"
 	"strings"
 	"time"
 
@@ -90,6 +91,18 @@ func resourceUserGroupCreate(d *schema.ResourceData, m interface{}) error {
 	}
 
 	d.SetId(group.Id)
+
+	memberIds, err := userEmailsToIDs(config, d.Get("members").([]string))
+	if err != nil {
+		return err
+	}
+
+	for _, memberId := range memberIds {
+		err := manageGroupMember(client, d, memberId, "add")
+		if err != nil {
+			return err
+		}
+	}
 	return resourceUserGroupRead(d, m)
 }
 
@@ -120,12 +133,12 @@ func resourceUserGroupRead(d *schema.ResourceData, m interface{}) error {
 	}
 
 	client := jcapiv2.NewAPIClient(config)
-	userGroupMemberIDs, err := getUserGroupMembers(client, group.ID)
+	memberIDs, err := getUserGroupMemberIDs(client, group.ID)
 	if err != nil {
 		return err
 	}
-	userGroupMemberEmails, err := userIDsToEmails(config, userGroupMemberIDs)
-	if err := d.Set("members", userGroupMemberEmails); err != nil {
+	memberEmails, err := userIDsToEmails(config, memberIDs)
+	if err := d.Set("members", memberEmails); err != nil {
 		return err
 	}
 
@@ -186,6 +199,37 @@ func resourceUserGroupUpdate(d *schema.ResourceData, m interface{}) error {
 		return fmt.Errorf("error deleting user group:%s; response = %+v", err, res)
 	}
 
+	oldMemberIDs, err := getUserGroupMemberIDs(client, d.Id())
+	if err != nil {
+		return err
+	}
+
+	newMembers := d.Get("members").([]string)
+	newMemberIDs, err := userEmailsToIDs(config, newMembers)
+	if err != nil {
+		return err
+	}
+
+	//add any new users
+	for _, newMemberID := range newMemberIDs {
+		if !slices.Contains(oldMemberIDs, newMemberID) {
+			err := manageGroupMember(client, d, newMemberID, "add")
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	//remove any old users
+	for _, oldMemberID := range oldMemberIDs {
+		if !slices.Contains(newMemberIDs, oldMemberID) {
+			err := manageGroupMember(client, d, oldMemberID, "remove")
+			if err != nil {
+				return err
+			}
+		}
+	}
+
 	return resourceUserGroupRead(d, m)
 }
 
@@ -203,7 +247,7 @@ func resourceUserGroupDelete(d *schema.ResourceData, m interface{}) error {
 	return nil
 }
 
-func getUserGroupMembers(client *jcapiv2.APIClient, groupID string) ([]string, error) {
+func getUserGroupMemberIDs(client *jcapiv2.APIClient, groupID string) ([]string, error) {
 	var userIds []string
 	for i := 0; ; i++ {
 		optionals := map[string]interface{}{
@@ -294,4 +338,24 @@ func userEmailsToIDs(configv2 *jcapiv2.Configuration, userEmails []string) ([]st
 	}
 
 	return ids, nil
+}
+
+func manageGroupMember(client *jcapiv2.APIClient, d *schema.ResourceData, memberID string, action string) error {
+	payload := jcapiv2.UserGroupGraphManagementReq{
+		Op:    action,
+		Type_: "user",
+		Id:    memberID,
+	}
+
+	req := map[string]interface{}{
+		"body": payload,
+	}
+
+	res, err := client.UserGroupAssociationsApi.GraphUserGroupAssociationsPost(
+		context.TODO(), d.Id(), "", "", req)
+
+	if err != nil {
+		return fmt.Errorf("error managing group member, action: %s, member id:%s, error: %s; response = %+v", action, memberID, err, res)
+	}
+	return nil
 }
