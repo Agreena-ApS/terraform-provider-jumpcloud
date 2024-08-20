@@ -6,7 +6,10 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
+	"time"
 
+	jcapiv1 "github.com/TheJumpCloud/jcapi-go/v1"
 	jcapiv2 "github.com/TheJumpCloud/jcapi-go/v2"
 	"github.com/hashicorp/terraform-plugin-sdk/helper/schema"
 )
@@ -34,6 +37,14 @@ func resourceUserGroup() *schema.Resource {
 							// PosixGroups cannot be edited after group creation.
 							ForceNew: true,
 							Optional: true,
+						},
+						"members": {
+							Type:        schema.TypeSet,
+							Optional:    true,
+							Description: "This is a set of user emails associated with this group",
+							Elem: &schema.Schema{
+								Type: schema.TypeString,
+							},
 						},
 						// enable_samba has a more complicated lifecycle,
 						// Commenting out for now as it is ignored in CRU by the JCAPI
@@ -105,6 +116,16 @@ func resourceUserGroupRead(d *schema.ResourceData, m interface{}) error {
 		return err
 	}
 	if err := d.Set("attributes", flattenAttributes(&group.Attributes)); err != nil {
+		return err
+	}
+
+	client := jcapiv2.NewAPIClient(config)
+	userGroupMemberIDs, err := getUserGroupMembers(client, group.ID)
+	if err != nil {
+		return err
+	}
+	userGroupMemberEmails, err := userIDsToEmails(config, userGroupMemberIDs)
+	if err := d.Set("members", userGroupMemberEmails); err != nil {
 		return err
 	}
 
@@ -180,4 +201,97 @@ func resourceUserGroupDelete(d *schema.ResourceData, m interface{}) error {
 	}
 	d.SetId("")
 	return nil
+}
+
+func getUserGroupMembers(client *jcapiv2.APIClient, groupID string) ([]string, error) {
+	var userIds []string
+	for i := 0; ; i++ {
+		optionals := map[string]interface{}{
+			"groupId": groupID,
+			"limit":   int32(100),
+			"skip":    int32(i * 100),
+		}
+
+		graphconnect, res, err := client.UserGroupMembersMembershipApi.GraphUserGroupMembersList(
+			context.TODO(), groupID, "", "", optionals)
+		if err != nil {
+			return nil, err
+			return nil, fmt.Errorf("error group members for group id %s, error:%s; response = %+v", groupID, err, res)
+		}
+
+		for _, v := range graphconnect {
+			userIds = append(userIds, v.To.Id)
+		}
+
+		if len(graphconnect) < 100 {
+			break
+		} else {
+			time.Sleep(100 * time.Millisecond)
+		}
+	}
+	return userIds, nil
+}
+
+func userIDsToEmails(configv2 *jcapiv2.Configuration, userIDs []string) ([]string, error) {
+	configv1 := convertV2toV1Config(configv2)
+	client := jcapiv1.NewAPIClient(configv1)
+	var emails []string
+
+	for i := 0; ; i++ {
+		users, res, err := client.SystemusersApi.SystemusersList(context.TODO(), "", "", map[string]interface{}{
+			"filter": "_id:$in:" + strings.Join(userIDs[:], "|"),
+			"limit":  int32(100),
+			"skip":   int32(i * 100),
+			"fields": "email",
+			"sort":   "email",
+		})
+
+		if err != nil {
+			return nil, fmt.Errorf("error loading user emails from IDs:%s; response = %+v", err, res)
+		}
+
+		for _, result := range users.Results {
+			emails = append(emails, result.Email)
+		}
+
+		if len(users.Results) < 100 {
+			break
+		} else {
+			time.Sleep(100 * time.Millisecond)
+		}
+	}
+
+	return emails, nil
+}
+
+func userEmailsToIDs(configv2 *jcapiv2.Configuration, userEmails []string) ([]string, error) {
+	configv1 := convertV2toV1Config(configv2)
+	client := jcapiv1.NewAPIClient(configv1)
+	var ids []string
+
+	for i := 0; ; i++ {
+		users, res, err := client.SystemusersApi.SystemusersList(context.TODO(), "", "", map[string]interface{}{
+			"filter": "email:$in:" + strings.Join(userEmails[:], "|"),
+			"limit":  int32(100),
+			"skip":   int32(i * 100),
+			"fields": "_id",
+			"sort":   "_id",
+		})
+
+		if err != nil {
+			return nil, fmt.Errorf("error loading user IDs from emails:%s; response = %+v", err, res)
+		}
+
+		for _, result := range users.Results {
+			ids = append(ids, result.Id)
+		}
+
+		if len(users.Results) < 100 {
+			break
+		} else {
+			time.Sleep(100 * time.Millisecond)
+		}
+	}
+
+	return ids, nil
 }
