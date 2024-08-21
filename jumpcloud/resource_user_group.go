@@ -133,11 +133,14 @@ func resourceUserGroupRead(d *schema.ResourceData, m interface{}) error {
 	}
 
 	client := jcapiv2.NewAPIClient(config)
-	memberIDs, err := getUserGroupMemberIDs(client, group.ID)
+	memberIDs, err := getUserGroupMemberIDs(client, d.Id())
 	if err != nil {
 		return err
 	}
 	memberEmails, err := userIDsToEmails(config, memberIDs)
+	if err != nil {
+		return err
+	}
 	if err := d.Set("members", memberEmails); err != nil {
 		return err
 	}
