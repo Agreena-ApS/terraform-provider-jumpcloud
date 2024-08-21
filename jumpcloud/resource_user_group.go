@@ -92,17 +92,17 @@ func resourceUserGroupCreate(d *schema.ResourceData, m interface{}) error {
 
 	d.SetId(group.Id)
 
-		memberIds, err := userEmailsToIDs(config, d.Get("members").([]interface {}))
+	memberIds, err := userEmailsToIDs(config, d.Get("members").([]interface{}))
+	if err != nil {
+		return err
+	}
+
+	for _, memberId := range memberIds {
+		err := manageGroupMember(client, d, memberId, "add")
 		if err != nil {
 			return err
 		}
-
-		for _, memberId := range memberIds {
-			err := manageGroupMember(client, d, memberId, "add")
-			if err != nil {
-				return err
-			}
-		}
+	}
 	return resourceUserGroupRead(d, m)
 }
 
@@ -207,7 +207,7 @@ func resourceUserGroupUpdate(d *schema.ResourceData, m interface{}) error {
 		return err
 	}
 
-	newMemberIDs, err := userEmailsToIDs(config, d.Get("members").([]interface {}))
+	newMemberIDs, err := userEmailsToIDs(config, d.Get("members").([]interface{}))
 	if err != nil {
 		return err
 	}

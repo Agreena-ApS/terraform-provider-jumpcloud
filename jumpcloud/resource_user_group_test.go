@@ -37,10 +37,31 @@ func TestAccUserGroup(t *testing.T) {
 
 func testAccUserGroup(name string, gid int, posixName string) string {
 	return fmt.Sprintf(`
+        resource "jumpcloud_user" "test_user1" {
+          username = "%[1]s1"
+          email = "%[1]s1@testorg.com"
+          firstname = "Firstname"
+          lastname = "Lastname"
+          enable_mfa = true
+        }
+        resource "jumpcloud_user" "test_user2" {
+          username = "%[1]s2"
+          email = "%[1]s2@testorg.com"
+          firstname = "Firstname"
+          lastname = "Lastname"
+          enable_mfa = true
+        }
+        resource "jumpcloud_user" "test_user3" {
+          username = "%[1]s3"
+          email = "%[1]s3@testorg.com"
+          firstname = "Firstname"
+          lastname = "Lastname"
+          enable_mfa = true
+        }
 		resource "jumpcloud_user_group" "test_group" {
-    		name = "%s"
+    		name = "%[1]s"
 			attributes = {
-				posix_groups = "%d:%s"
+				posix_groups = "%[2]d:%[3]s"
 			}
 		}`, name, gid, posixName,
 	)
