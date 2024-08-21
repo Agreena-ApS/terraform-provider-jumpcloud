@@ -39,14 +39,6 @@ func resourceUserGroup() *schema.Resource {
 							ForceNew: true,
 							Optional: true,
 						},
-						"members": {
-							Type:        schema.TypeSet,
-							Optional:    true,
-							Description: "This is a set of user emails associated with this group",
-							Elem: &schema.Schema{
-								Type: schema.TypeString,
-							},
-						},
 						// enable_samba has a more complicated lifecycle,
 						// Commenting out for now as it is ignored in CRU by the JCAPI
 						// From Jumpcloud UI:
@@ -58,6 +50,14 @@ func resourceUserGroup() *schema.Resource {
 						// 	Optional: true,
 						// },
 					},
+				},
+			},
+			"members": {
+				Type:        schema.TypeList,
+				Optional:    true,
+				Description: "This is a set of user emails associated with this group",
+				Elem: &schema.Schema{
+					Type: schema.TypeString,
 				},
 			},
 		},
@@ -92,17 +92,17 @@ func resourceUserGroupCreate(d *schema.ResourceData, m interface{}) error {
 
 	d.SetId(group.Id)
 
-	memberIds, err := userEmailsToIDs(config, d.Get("members").([]string))
-	if err != nil {
-		return err
-	}
-
-	for _, memberId := range memberIds {
-		err := manageGroupMember(client, d, memberId, "add")
+		memberIds, err := userEmailsToIDs(config, d.Get("members").([]interface {}))
 		if err != nil {
 			return err
 		}
-	}
+
+		for _, memberId := range memberIds {
+			err := manageGroupMember(client, d, memberId, "add")
+			if err != nil {
+				return err
+			}
+		}
 	return resourceUserGroupRead(d, m)
 }
 
@@ -207,8 +207,7 @@ func resourceUserGroupUpdate(d *schema.ResourceData, m interface{}) error {
 		return err
 	}
 
-	newMembers := d.Get("members").([]string)
-	newMemberIDs, err := userEmailsToIDs(config, newMembers)
+	newMemberIDs, err := userEmailsToIDs(config, d.Get("members").([]interface {}))
 	if err != nil {
 		return err
 	}
@@ -280,9 +279,14 @@ func getUserGroupMemberIDs(client *jcapiv2.APIClient, groupID string) ([]string,
 }
 
 func userIDsToEmails(configv2 *jcapiv2.Configuration, userIDs []string) ([]string, error) {
+	var emails []string
+
+	if len(userIDs) == 0 {
+		return emails, nil
+	}
+
 	configv1 := convertV2toV1Config(configv2)
 	client := jcapiv1.NewAPIClient(configv1)
-	var emails []string
 
 	for i := 0; ; i++ {
 		users, res, err := client.SystemusersApi.SystemusersList(context.TODO(), "", "", map[string]interface{}{
@@ -294,7 +298,7 @@ func userIDsToEmails(configv2 *jcapiv2.Configuration, userIDs []string) ([]strin
 		})
 
 		if err != nil {
-			return nil, fmt.Errorf("error loading user emails from IDs:%s; response = %+v", err, res)
+			return nil, fmt.Errorf("error loading user emails from IDs: %s, i:%d, error:%s; response:%+v", userIDs, i, err, res)
 		}
 
 		for _, result := range users.Results {
@@ -311,10 +315,20 @@ func userIDsToEmails(configv2 *jcapiv2.Configuration, userIDs []string) ([]strin
 	return emails, nil
 }
 
-func userEmailsToIDs(configv2 *jcapiv2.Configuration, userEmails []string) ([]string, error) {
+func userEmailsToIDs(configv2 *jcapiv2.Configuration, userEmailsInterface []interface{}) ([]string, error) {
+	var userEmails []string
+	for _, userEmail := range userEmailsInterface {
+		userEmails = append(userEmails, userEmail.(string))
+	}
+
+	var ids []string
+
+	if len(userEmails) == 0 {
+		return ids, nil
+	}
+
 	configv1 := convertV2toV1Config(configv2)
 	client := jcapiv1.NewAPIClient(configv1)
-	var ids []string
 
 	for i := 0; ; i++ {
 		users, res, err := client.SystemusersApi.SystemusersList(context.TODO(), "", "", map[string]interface{}{

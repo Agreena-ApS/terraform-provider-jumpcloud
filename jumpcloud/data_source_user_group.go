@@ -21,7 +21,7 @@ func dataSourceJumpCloudUserGroup() *schema.Resource {
 				Computed: true,
 			},
 			"members": {
-				Type:        schema.TypeSet,
+				Type:        schema.TypeList,
 				Computed:    true,
 				Description: "This is a set of user emails associated with this group",
 				Elem: &schema.Schema{
