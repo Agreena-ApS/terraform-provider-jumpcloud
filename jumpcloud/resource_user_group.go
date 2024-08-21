@@ -358,7 +358,7 @@ func userEmailsToIDs(configv2 *jcapiv2.Configuration, userEmailsInterface []inte
 }
 
 func manageGroupMember(client *jcapiv2.APIClient, d *schema.ResourceData, memberID string, action string) error {
-	payload := jcapiv2.UserGroupGraphManagementReq{
+	payload := jcapiv2.UserGroupMembersReq{
 		Op:    action,
 		Type_: "user",
 		Id:    memberID,
@@ -368,7 +368,7 @@ func manageGroupMember(client *jcapiv2.APIClient, d *schema.ResourceData, member
 		"body": payload,
 	}
 
-	res, err := client.UserGroupAssociationsApi.GraphUserGroupAssociationsPost(
+	res, err := client.UserGroupMembersMembershipApi.GraphUserGroupMembersPost(
 		context.TODO(), d.Id(), "", "", req)
 
 	if err != nil {
