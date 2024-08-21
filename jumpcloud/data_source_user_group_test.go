@@ -21,6 +21,9 @@ func TestAccDataSourceJumpCloudUserGroup_basic(t *testing.T) {
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttrSet("data.jumpcloud_user_group.test_group", "id"),
 					resource.TestCheckResourceAttr("data.jumpcloud_user_group.test_group", "group_name", rName),
+					resource.TestCheckResourceAttr("data.jumpcloud_user_group.test_group", "members.#", "2"),
+					resource.TestCheckResourceAttr("data.jumpcloud_user_group.test_group", "members.0", fmt.Sprintf("%s1@testorg.com", rName)),
+					resource.TestCheckResourceAttr("data.jumpcloud_user_group.test_group", "members.1", fmt.Sprintf("%s3@testorg.com", rName)),
 				),
 			},
 		},
