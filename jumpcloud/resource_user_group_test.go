@@ -1,11 +1,14 @@
 package jumpcloud
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"sort"
 	"testing"
+    "time"
 
 	jcapiv2 "github.com/TheJumpCloud/jcapi-go/v2"
 	"github.com/hashicorp/terraform-plugin-sdk/helper/acctest"
@@ -53,7 +56,7 @@ func TestAccUserGroup(t *testing.T) {
 				),
 			},
 			{
-				Config: testAccUserGroupRemoveExternalAdded(rName, gid, posixName),
+				Config: testAccUserGroupExternalAddRemove(rName, gid, posixName, t),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr("jumpcloud_user_group.test_group", "members.#", "2"),
 					resource.TestCheckResourceAttr("jumpcloud_user_group.test_group", "members.0", fmt.Sprintf("%s1@testorg.com", rName)),
@@ -107,8 +110,45 @@ func testAccUserGroupUpdate(name string, gid int, posixName string) string {
 		}`, name, gid, posixName,
 	)
 }
+func testAccUserGroupExternalAddRemove(name string, gid int, posixName string, t *testing.T) string {
+	config := jcapiv2.NewConfiguration()
+	config.AddDefaultHeader("x-api-key", os.Getenv("JUMPCLOUD_API_KEY"))
+	client := jcapiv2.NewAPIClient(config)
 
-func testAccUserGroupRemoveExternalAdded(name string, gid int, posixName string) string {
+	groups, _, err := client.UserGroupsApi.GroupsUserList(context.Background(), "application/json", "application/json", map[string]interface{}{
+		"filter": fmt.Sprintf(`{"name":"%s"}`, name),
+		"limit":  int32(1),
+		"sort":   []string{},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	email := make([]interface{}, 1)
+	email[0] = fmt.Sprintf("%s43@testorg.com", name)
+
+    time.Sleep(100 * time.Second)
+	ids, err := userEmailsToIDs(config, email)
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload := jcapiv2.UserGroupMembersReq{
+		Op:    "add",
+		Type_: "user",
+		Id:    ids[0],
+	}
+
+	req := map[string]interface{}{
+		"body": payload,
+	}
+
+    res, err := client.UserGroupMembersMembershipApi.GraphUserGroupMembersPost(
+		context.TODO(), groups[0].Id, "", "", req)
+
+	if err != nil {
+		t.Fatal(fmt.Errorf("error adding user to group via api. error: %s, res: %+v", err, res))
+	}
+
 	return fmt.Sprintf(`
 		resource "jumpcloud_user" "test_users" {
 			count = 123 #test pagination on group membership
