@@ -49,9 +49,11 @@ func resourceUserGroup() *schema.Resource {
 				},
 			},
 			"members": {
-				Type:        schema.TypeList,
-				Optional:    true,
-				Description: "This is a set of user emails associated with this group",
+				Type:             schema.TypeList,
+				Optional:         true,
+				Computed:         true,
+				DiffSuppressFunc: EqualIgnoringOrder,
+				Description:      "This is a set of user emails associated with this group",
 				Elem: &schema.Schema{
 					Type: schema.TypeString,
 				},

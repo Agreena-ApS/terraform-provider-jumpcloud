@@ -8,6 +8,8 @@ import (
 	"github.com/go-resty/resty/v2"
 	"github.com/hashicorp/terraform-plugin-sdk/helper/schema"
 	"log"
+	"reflect"
+	"sort"
 	"strings"
 	"time"
 )
@@ -58,8 +60,7 @@ func getUserGroupMemberIDs(client *jcapiv2.APIClient, groupID string) ([]string,
 		graphconnect, res, err := client.UserGroupMembersMembershipApi.GraphUserGroupMembersList(
 			context.TODO(), groupID, "", "", optionals)
 		if err != nil {
-			return nil, err
-			return nil, fmt.Errorf("error group members for group id %s, error:%s; response = %+v", groupID, err, res)
+			return nil, fmt.Errorf("error getting group members for group id %s, error:%s; response = %+v", groupID, err, res)
 		}
 
 		for _, v := range graphconnect {
@@ -76,7 +77,7 @@ func getUserGroupMemberIDs(client *jcapiv2.APIClient, groupID string) ([]string,
 }
 
 func userIDsToEmails(configv2 *jcapiv2.Configuration, userIDs []string) ([]string, error) {
-	var emails []string
+	emails := make([]string, len(userIDs))
 
 	if len(userIDs) == 0 {
 		return emails, nil
@@ -98,8 +99,8 @@ func userIDsToEmails(configv2 *jcapiv2.Configuration, userIDs []string) ([]strin
 			return nil, fmt.Errorf("error loading user emails from IDs: %s, i:%d, error:%s; response:%+v", userIDs, i, err, res)
 		}
 
-		for _, result := range users.Results {
-			emails = append(emails, result.Email)
+		for j, result := range users.Results {
+			emails[j+(i*100)] = result.Email
 		}
 
 		if len(users.Results) < 100 {
@@ -113,12 +114,12 @@ func userIDsToEmails(configv2 *jcapiv2.Configuration, userIDs []string) ([]strin
 }
 
 func userEmailsToIDs(configv2 *jcapiv2.Configuration, userEmailsInterface []interface{}) ([]string, error) {
-	var userEmails []string
-	for _, userEmail := range userEmailsInterface {
-		userEmails = append(userEmails, userEmail.(string))
+	userEmails := make([]string, len(userEmailsInterface))
+	for i, userEmail := range userEmailsInterface {
+		userEmails[i] = userEmail.(string)
 	}
 
-	var ids []string
+	ids := make([]string, len(userEmailsInterface))
 
 	if len(userEmails) == 0 {
 		return ids, nil
@@ -140,8 +141,8 @@ func userEmailsToIDs(configv2 *jcapiv2.Configuration, userEmailsInterface []inte
 			return nil, fmt.Errorf("error loading user IDs from emails:%s; response = %+v", err, res)
 		}
 
-		for _, result := range users.Results {
-			ids = append(ids, result.Id)
+		for j, result := range users.Results {
+			ids[j+(i*100)] = result.Id
 		}
 
 		if len(users.Results) < 100 {
@@ -172,4 +173,36 @@ func manageGroupMember(client *jcapiv2.APIClient, d *schema.ResourceData, member
 		return fmt.Errorf("error managing group member, action: %s, member id:%s, error: %s; response = %+v", action, memberID, err, res)
 	}
 	return nil
+}
+
+func EqualIgnoringOrder(key, oldValue, newValue string, d *schema.ResourceData) bool {
+	// The key is a path not the list itself, e.g. "events.0"
+	lastDotIndex := strings.LastIndex(key, ".")
+	if lastDotIndex != -1 {
+		key = string(key[:lastDotIndex])
+	}
+	oldData, newData := d.GetChange(key)
+	if oldData == nil || newData == nil {
+		return false
+	}
+	oldArray := oldData.([]interface{})
+	newArray := newData.([]interface{})
+	if len(oldArray) != len(newArray) {
+		// Items added or removed, always detect as changed
+		return false
+	}
+
+	// Convert data to string arrays
+	oldItems := make([]string, len(oldArray))
+	newItems := make([]string, len(newArray))
+	for i, oldItem := range oldArray {
+		oldItems[i] = oldItem.(string)
+	}
+	for j, newItem := range newArray {
+		newItems[j] = newItem.(string)
+	}
+	// Ensure consistent sorting before comparison, to suppress unnecessary change detections
+	sort.Strings(oldItems)
+	sort.Strings(newItems)
+	return reflect.DeepEqual(oldItems, newItems)
 }
