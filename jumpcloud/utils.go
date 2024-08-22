@@ -78,8 +78,7 @@ func getUserGroupMemberIDs(client *jcapiv2.APIClient, groupID string) ([]string,
 }
 
 func userIDsToEmails(configv2 *jcapiv2.Configuration, userIDs []string) ([]string, error) {
-	//	emails := make([]string, len(userIDs))
-	var emails []string
+	emails := make([]string, len(userIDs))
 
 	if len(userIDs) == 0 {
 		return emails, nil
@@ -101,9 +100,8 @@ func userIDsToEmails(configv2 *jcapiv2.Configuration, userIDs []string) ([]strin
 			return nil, fmt.Errorf("error loading user emails from IDs: %s, i:%d, error:%s; response:%+v", userIDs, i, err, res)
 		}
 
-		for _, result := range users.Results {
-			//emails[j+(i*100)] = result.Email
-			emails = append(emails, result.Email)
+		for j, result := range users.Results {
+			emails[j+(i*100)] = result.Email
 		}
 
 		if len(users.Results) < 100 {
@@ -122,8 +120,7 @@ func userEmailsToIDs(configv2 *jcapiv2.Configuration, userEmailsInterface []inte
 		userEmails[i] = userEmail.(string)
 	}
 
-	//ids := make([]string, len(userEmailsInterface))
-	var ids []string
+	ids := make([]string, len(userEmailsInterface))
 
 	if len(userEmails) == 0 {
 		return ids, nil
@@ -145,9 +142,8 @@ func userEmailsToIDs(configv2 *jcapiv2.Configuration, userEmailsInterface []inte
 			return nil, fmt.Errorf("error loading user IDs from emails:%s; response = %+v", err, res)
 		}
 
-		for _, result := range users.Results {
-			//ids[j+(i*100)] = result.Ig
-			ids = append(ids, result.Id)
+		for j, result := range users.Results {
+			ids[j+(i*100)] = result.Ig
 		}
 
 		if len(users.Results) < 100 {
