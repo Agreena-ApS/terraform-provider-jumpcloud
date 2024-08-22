@@ -143,7 +143,7 @@ func userEmailsToIDs(configv2 *jcapiv2.Configuration, userEmailsInterface []inte
 		}
 
 		for j, result := range users.Results {
-			ids[j+(i*100)] = result.Ig
+			ids[j+(i*100)] = result.Id
 		}
 
 		if len(users.Results) < 100 {
@@ -176,6 +176,7 @@ func manageGroupMember(client *jcapiv2.APIClient, d *schema.ResourceData, member
 	return nil
 }
 
+// https://github.com/rootlyhq/terraform-provider-rootly/blob/99175a7ab4e154793ea8a8710d329a3f48eb0c90/tools/ignore_array_order.go#L12
 func EqualIgnoringOrder(key, oldValue, newValue string, d *schema.ResourceData) bool {
 	// The key is a path not the list itself, e.g. "events.0"
 	lastDotIndex := strings.LastIndex(key, ".")
