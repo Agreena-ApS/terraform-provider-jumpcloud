@@ -3,15 +3,16 @@ package jumpcloud
 import (
 	"context"
 	"fmt"
-	jcapiv1 "github.com/TheJumpCloud/jcapi-go/v1"
-	jcapiv2 "github.com/TheJumpCloud/jcapi-go/v2"
-	"github.com/go-resty/resty/v2"
-	"github.com/hashicorp/terraform-plugin-sdk/helper/schema"
 	"log"
 	"reflect"
 	"sort"
 	"strings"
 	"time"
+
+	jcapiv1 "github.com/TheJumpCloud/jcapi-go/v1"
+	jcapiv2 "github.com/TheJumpCloud/jcapi-go/v2"
+	"github.com/go-resty/resty/v2"
+	"github.com/hashicorp/terraform-plugin-sdk/helper/schema"
 )
 
 // Gets an application's metadata XML for SAML authentication
@@ -77,7 +78,8 @@ func getUserGroupMemberIDs(client *jcapiv2.APIClient, groupID string) ([]string,
 }
 
 func userIDsToEmails(configv2 *jcapiv2.Configuration, userIDs []string) ([]string, error) {
-	emails := make([]string, len(userIDs))
+	//	emails := make([]string, len(userIDs))
+	var emails []string
 
 	if len(userIDs) == 0 {
 		return emails, nil
@@ -99,8 +101,9 @@ func userIDsToEmails(configv2 *jcapiv2.Configuration, userIDs []string) ([]strin
 			return nil, fmt.Errorf("error loading user emails from IDs: %s, i:%d, error:%s; response:%+v", userIDs, i, err, res)
 		}
 
-		for j, result := range users.Results {
-			emails[j+(i*100)] = result.Email
+		for _, result := range users.Results {
+			//emails[j+(i*100)] = result.Email
+			emails = append(emails, result.Email)
 		}
 
 		if len(users.Results) < 100 {
@@ -119,7 +122,8 @@ func userEmailsToIDs(configv2 *jcapiv2.Configuration, userEmailsInterface []inte
 		userEmails[i] = userEmail.(string)
 	}
 
-	ids := make([]string, len(userEmailsInterface))
+	//ids := make([]string, len(userEmailsInterface))
+	var ids []string
 
 	if len(userEmails) == 0 {
 		return ids, nil
@@ -141,8 +145,9 @@ func userEmailsToIDs(configv2 *jcapiv2.Configuration, userEmailsInterface []inte
 			return nil, fmt.Errorf("error loading user IDs from emails:%s; response = %+v", err, res)
 		}
 
-		for j, result := range users.Results {
-			ids[j+(i*100)] = result.Id
+		for _, result := range users.Results {
+			//ids[j+(i*100)] = result.Ig
+			ids = append(ids, result.Id)
 		}
 
 		if len(users.Results) < 100 {
